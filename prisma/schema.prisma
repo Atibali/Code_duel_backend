@@ -43,6 +43,7 @@ model Challenge {
   startDate               DateTime
   endDate                 DateTime
   status                  ChallengeStatus    @default(PENDING)
+  visibility              ChallengeVisibility @default(PUBLIC)
   
   createdAt               DateTime           @default(now())
   updatedAt               DateTime           @updatedAt
@@ -165,4 +166,9 @@ enum ChallengeStatus {
   ACTIVE
   COMPLETED
   CANCELLED
+}
+
+enum ChallengeVisibility {
+  PUBLIC
+  PRIVATE
 }

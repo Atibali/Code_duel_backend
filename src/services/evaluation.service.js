@@ -2,6 +2,7 @@ const { prisma } = require("../config/prisma");
 const leetcodeService = require("./leetcode.service");
 const penaltyService = require("./penalty.service");
 const logger = require("../utils/logger");
+const { sendStreakBrokenNotification } = require("./email.service");
 
 /**
  * Run daily evaluation for all active challenges
@@ -30,6 +31,7 @@ const runDailyEvaluation = async () => {
             user: {
               select: {
                 id: true,
+                email: true,
                 username: true,
                 leetcodeUsername: true,
               },
@@ -117,30 +119,7 @@ const evaluateMember = async (challenge, member, evaluationDate) => {
     return;
   }
 
-  // Fetch LeetCode session (if stored)
-  const sessionData = await leetcodeService.getUserSession(user.id);
 
-
-  // Fetch submissions for the date using rate-limited client
-  const { leetcodeApiRequest } = require("./leetcodeApiClient");
-  let submissions;
-  try {
-    // Use the same query as leetcodeService.fetchSubmissionsForDate
-    const RECENT_SUBMISSIONS_QUERY = `
-      query recentAcSubmissions($username: String!, $limit: Int!) {
-        recentAcSubmissionList(username: $username, limit: $limit) {
-          id
-          title
-          titleSlug
-          timestamp
-          statusDisplay
-          lang
-        }
-      }
-    `;
-    submissions = await leetcodeApiRequest(
-      RECENT_SUBMISSIONS_QUERY,
-      { username: user.leetcodeUsername, limit: 10 }
     );
     submissions = submissions?.recentAcSubmissionList || [];
   } catch (error) {
@@ -168,8 +147,7 @@ const evaluateMember = async (challenge, member, evaluationDate) => {
   // Enrich submissions with metadata (difficulty, etc.)
   const enrichedSubmissions =
     await leetcodeService.enrichSubmissionsWithMetadata(
-      submissions,
-      sessionData
+      submissions
     );
 
   // Filter by difficulty if specified
@@ -216,7 +194,7 @@ const evaluateMember = async (challenge, member, evaluationDate) => {
   );
 
   // Update streak
-  await updateStreak(member.id, completed);
+  await updateStreak(member.id, completed, user, challenge.name);
 
   // Apply penalty if failed
   if (!completed) {
@@ -264,7 +242,7 @@ const createDailyResult = async (
 /**
  * Update member's streak based on completion status
  */
-const updateStreak = async (memberId, completed) => {
+const updateStreak = async (memberId, completed, user, challengeName) => {
   const member = await prisma.challengeMember.findUnique({
     where: { id: memberId },
   });
@@ -282,6 +260,18 @@ const updateStreak = async (memberId, completed) => {
       },
     });
   } else {
+    // Send streak broken notification if they had a streak
+    if (member.currentStreak > 0 && user && user.email) {
+      sendStreakBrokenNotification(
+        user.email,
+        user.username,
+        member.currentStreak,
+        challengeName
+      ).catch((err) => {
+        logger.error(`Failed to send streak broken notification: ${err.message}`);
+      });
+    }
+
     // Reset current streak
     await prisma.challengeMember.update({
       where: { id: memberId },

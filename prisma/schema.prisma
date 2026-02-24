@@ -32,6 +32,20 @@ model User {
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
 
+  id                String             @id @default(uuid())
+  email             String             @unique
+  username          String             @unique
+  password          String
+  passwordResetTokenHash String?
+  passwordResetTokenExpiry DateTime?
+  leetcodeUsername  String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  
+  // Email Preferences
+  emailPreferences  Json?              @default("{\"welcomeEmail\": true, \"streakReminder\": true, \"streakBroken\": true, \"weeklySummary\": true}")
+  
+
   // Relations
   dailySubmissions   DailySubmission[] @relation("UserDailySubmissions")
   ownedChallenges    Challenge[]       @relation("ChallengeOwner")

@@ -44,6 +44,7 @@ router.post("/:id/join", authenticate, challengeController.joinChallenge);
 router.patch(
   "/:id/status",
   authenticate,
+  challengeController.validateStatusUpdate,
   challengeController.updateChallengeStatus
 );
 

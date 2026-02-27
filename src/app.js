@@ -2,7 +2,6 @@ const express = require("express");
 const cors = require("cors");
 const { config } = require("./config/env");
 const { errorHandler, notFound } = require("./middlewares/error.middleware");
-const logger = require("./utils/logger");
 
 // Import routes
 const authRoutes = require("./routes/auth.routes");
@@ -10,6 +9,13 @@ const challengeRoutes = require("./routes/challenge.routes");
 const dashboardRoutes = require("./routes/dashboard.routes");
 const leetcodeRoutes = require("./routes/leetcode.routes");
 const { apiLimiter, authLimiter } = require('./middlewares/rateLimiter.middleware');
+
+// Import security middlewares
+const {
+  sanitizeInputs,
+  securityScanMiddleware,
+  enforceSizeLimit,
+} = require("./middlewares/sanitization.middleware");
 
 /**
  * Initialize Express application
@@ -35,6 +41,16 @@ const createApp = () => {
   // 3. Body parser middleware
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+
+  // 4. Input Sanitization & Security Middlewares (Team T066 Security Implementation)
+  // Enforce maximum request size to prevent DoS attacks
+  app.use(enforceSizeLimit(100000)); // 100KB max payload
+  
+  // Perform security scanning to detect XSS, SQL injection, path traversal, etc.
+  app.use(securityScanMiddleware);
+  
+  // Sanitize all inputs in body, query params, and URL params
+  app.use(sanitizeInputs({ maxLength: 1000 }));
 
   // Request logging middleware
   app.use((req, res, next) => {

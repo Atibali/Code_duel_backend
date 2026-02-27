@@ -3,6 +3,7 @@ const { config } = require("./env");
 const logger = require("../utils/logger");
 const evaluationService = require("../services/evaluation.service");
 const emailService = require("../services/email.service");
+const { prisma } = require("./prisma");
 
 class CronManager {
   constructor() {
@@ -39,6 +40,38 @@ class CronManager {
     this.jobs.push({
       name: "dailyEvaluation",
       job: dailyEvaluationJob,
+    });
+
+    // Token blacklist cleanup job - runs every hour to remove expired tokens
+    const tokenCleanupJob = cron.schedule(
+      "0 * * * *", // Every hour at minute 0
+      async () => {
+        logger.info("Starting token blacklist cleanup");
+        try {
+          const now = new Date();
+          const result = await prisma.tokenBlacklist.deleteMany({
+            where: {
+              expiresAt: {
+                lte: now, // Delete tokens that have expired
+              },
+            },
+          });
+          logger.info(
+            `Token blacklist cleanup completed. Deleted ${result.count} expired tokens`
+          );
+        } catch (error) {
+          logger.error("Token blacklist cleanup failed:", error);
+        }
+      },
+      {
+        scheduled: true,
+        timezone: "UTC",
+      }
+    );
+
+    this.jobs.push({
+      name: "tokenCleanup",
+      job: tokenCleanupJob,
     });
 
     // Daily reminder job - runs every day at configured time (default: 6 PM)

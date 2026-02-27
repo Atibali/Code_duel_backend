@@ -36,6 +36,7 @@ const validateLogin = [
 ];
 
 /**
+<<<<<<< feat/reset-password
  * Validation middleware for forgot password
  */
 const validateForgotPassword = [
@@ -53,6 +54,25 @@ const validateResetPassword = [
   body("newPassword")
     .isLength({ min: 6 })
     .withMessage("New password must be at least 6 characters"),
+=======
+ * Validation middleware for profile update
+ */
+const validateUpdateProfile = [
+  body("leetcodeUsername")
+    .optional({ nullable: true })
+    .isString()
+    .isLength({ min: 1, max: 50 })
+    .withMessage("LeetCode username must be 1-50 characters"),
+  body("newPassword")
+    .optional()
+    .isString()
+    .isLength({ min: 6 })
+    .withMessage("New password must be at least 6 characters"),
+  body("currentPassword")
+    .if(body("newPassword").exists({ checkFalsy: true }))
+    .notEmpty()
+    .withMessage("Current password is required when setting a new password"),
+>>>>>>> main
 ];
 
 /**
@@ -130,6 +150,16 @@ const getProfile = asyncHandler(async (req, res) => {
  * PUT /api/auth/profile
  */
 const updateProfile = asyncHandler(async (req, res) => {
+  // Check for validation errors
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: "Validation failed",
+      errors: errors.array(),
+    });
+  }
+
   const { leetcodeUsername, currentPassword, newPassword } = req.body;
 
   const user = await authService.updateProfile(req.user.id, {
@@ -198,8 +228,12 @@ module.exports = {
   updateProfile,
   validateRegister,
   validateLogin,
+<<<<<<< feat/reset-password
   forgotPassword,
   resetPassword,
   validateForgotPassword,
   validateResetPassword,
+=======
+  validateUpdateProfile,
+>>>>>>> main
 };

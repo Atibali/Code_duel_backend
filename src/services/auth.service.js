@@ -8,6 +8,8 @@ const logger = require("../utils/logger");
 const { logAudit } = require("../utils/auditLogger");
 const { sendWelcomeEmail, sendPasswordResetEmail } = require("./email.service");
 
+const MIN_PASSWORD_LENGTH = 6;
+
 /**
  * Register a new user
  */
@@ -146,6 +148,13 @@ const updateProfile = async (userId, updateData) => {
 
   // If password change requested
   if (newPassword) {
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      throw new AppError(
+        `Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
+        400
+      );
+    }
+
     if (!currentPassword) {
       throw new AppError("Current password is required", 400);
     }

@@ -36,25 +36,6 @@ const validateLogin = [
 ];
 
 /**
-<<<<<<< feat/reset-password
- * Validation middleware for forgot password
- */
-const validateForgotPassword = [
-  body("email")
-    .isEmail()
-    .normalizeEmail()
-    .withMessage("Valid email is required"),
-];
-
-/**
- * Validation middleware for reset password
- */
-const validateResetPassword = [
-  body("token").notEmpty().withMessage("Reset token is required"),
-  body("newPassword")
-    .isLength({ min: 6 })
-    .withMessage("New password must be at least 6 characters"),
-=======
  * Validation middleware for profile update
  */
 const validateUpdateProfile = [
@@ -72,8 +53,28 @@ const validateUpdateProfile = [
     .if(body("newPassword").exists({ checkFalsy: true }))
     .notEmpty()
     .withMessage("Current password is required when setting a new password"),
->>>>>>> main
 ];
+
+/**
+ * Validation middleware for forgot password
+ */
+const validateForgotPassword = [
+  body("email")
+    .isEmail()
+    .normalizeEmail()
+    .withMessage("Valid email is required"),
+];
+
+/**
+ * Validation middleware for reset password
+ */
+const validateResetPassword = [
+  body("token").notEmpty().withMessage("Reset token is required"),
+  body("newPassword")
+    .isLength({ min: 6 })
+    .withMessage("New password must be at least 6 characters"),
+];
+
 
 /**
  * Register a new user
@@ -226,14 +227,12 @@ module.exports = {
   login,
   getProfile,
   updateProfile,
-  validateRegister,
-  validateLogin,
-<<<<<<< feat/reset-password
   forgotPassword,
   resetPassword,
+  validateRegister,
+  validateLogin,
   validateForgotPassword,
   validateResetPassword,
-=======
   validateUpdateProfile,
->>>>>>> main
 };
+

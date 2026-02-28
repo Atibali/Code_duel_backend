@@ -5,6 +5,7 @@ const responseTime = require("response-time");
 const { config } = require("./config/env");
 const { errorHandler, notFound } = require("./middlewares/error.middleware");
 const logger = require("./utils/logger");
+const { apiLimiter } = require("./config/rateLimiter");
 
 const adminRoutes = require("./routes/admin.routes");
 
@@ -47,6 +48,15 @@ const createApp = () => {
   // Body parser middleware
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+
+  // Request logging middleware
+  app.use((req, res, next) => {
+    // logger.info(`${req.method} ${req.path}`);
+    next();
+  });
+
+  // Apply rate limiting to all API routes
+  app.use("/api/", apiLimiter);
 
   // Health check endpoint
   app.get("/health", (req, res) => {

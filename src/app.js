@@ -1,7 +1,16 @@
 const express = require("express");
 const cors = require("cors");
+const { default: addRequestId } = require("express-request-id");
+const responseTime = require("response-time");
 const { config } = require("./config/env");
 const { errorHandler, notFound } = require("./middlewares/error.middleware");
+const logger = require("./utils/logger");
+const { apiLimiter } = require("./config/rateLimiter");
+
+const adminRoutes = require("./routes/admin.routes");
+
+const requestLogger = require("./middlewares/requestLogger");
+
 
 // Import routes
 const authRoutes = require("./routes/auth.routes");
@@ -29,7 +38,7 @@ const createApp = () => {
   
   // Apply strict limiting specifically to auth routes
   app.use('/api/auth/', authLimiter);
-
+  app.use("/api/admin", adminRoutes);
   // 2. CORS configuration
   app.use(
     cors({
@@ -38,7 +47,12 @@ const createApp = () => {
     })
   );
 
-  // 3. Body parser middleware
+  // Request tracking middleware
+  app.use(addRequestId());
+  app.use(responseTime());
+  app.use(requestLogger);
+
+  // Body parser middleware
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
@@ -57,6 +71,9 @@ const createApp = () => {
     // logger.info(`${req.method} ${req.path}`);
     next();
   });
+
+  // Apply rate limiting to all API routes
+  app.use("/api/", apiLimiter);
 
   // Health check endpoint
   app.get("/health", (req, res) => {

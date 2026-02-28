@@ -163,15 +163,37 @@ const parseSubmissions = async (submissions) => {
 };
 
 /**
-/**
  * Fetch submissions for a specific date (helper function)
  * @param {string} leetcodeUsername - LeetCode username
  * @param {Date} date - Date to fetch submissions for
  * @returns {Array} Submissions for the date
  */
 const fetchSubmissionsForDate = async (leetcodeUsername, date) => {
+  const allSubmissions = await fetchUserSubmissions(leetcodeUsername);
+  
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(date);
+  endOfDay.setHours(23, 59, 59, 999);
+  
+  const startTimestamp = Math.floor(startOfDay.getTime() / 1000);
+  const endTimestamp = Math.floor(endOfDay.getTime() / 1000);
+  
+  return allSubmissions.filter(sub => {
+    const subTimestamp = parseInt(sub.timestamp);
+    return subTimestamp >= startTimestamp && subTimestamp <= endTimestamp;
+  const submissions = await fetchUserSubmissions(leetcodeUsername);
 
-  return await fetchUserSubmissions(leetcodeUsername);
+  const targetDate = new Date(date);
+  targetDate.setHours(0, 0, 0, 0);
+
+  const nextDate = new Date(targetDate);
+  nextDate.setDate(nextDate.getDate() + 1);
+
+  return submissions.filter((submission) => {
+    const submissionDate = new Date(parseInt(submission.timestamp, 10) * 1000);
+    return submissionDate >= targetDate && submissionDate < nextDate;
+  });
 };
 
 /**

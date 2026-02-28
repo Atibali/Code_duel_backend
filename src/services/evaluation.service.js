@@ -2,6 +2,7 @@ const { prisma } = require("../config/prisma");
 const leetcodeService = require("./leetcode.service");
 const penaltyService = require("./penalty.service");
 const logger = require("../utils/logger");
+const { sendStreakBrokenNotification } = require("./email.service");
 
 /**
  * Run daily evaluation for all active challenges
@@ -30,6 +31,7 @@ const runDailyEvaluation = async () => {
             user: {
               select: {
                 id: true,
+                email: true,
                 username: true,
                 leetcodeUsername: true,
               },
@@ -117,16 +119,12 @@ const evaluateMember = async (challenge, member, evaluationDate) => {
     return;
   }
 
-  // Fetch LeetCode session (if stored)
-  const sessionData = await leetcodeService.getUserSession(user.id);
-
   // Fetch submissions for the date
   let submissions;
   try {
     submissions = await leetcodeService.fetchSubmissionsForDate(
       user.leetcodeUsername,
-      evaluationDate,
-      sessionData
+      evaluationDate
     );
   } catch (error) {
     logger.error(
@@ -155,8 +153,7 @@ const evaluateMember = async (challenge, member, evaluationDate) => {
   // Enrich submissions with metadata (difficulty, etc.)
   const enrichedSubmissions =
     await leetcodeService.enrichSubmissionsWithMetadata(
-      submissions,
-      sessionData
+      submissions
     );
 
   // Filter by difficulty if specified
@@ -203,7 +200,7 @@ const evaluateMember = async (challenge, member, evaluationDate) => {
   );
 
   // Update streak
-  await updateStreak(member.id, completed);
+  await updateStreak(member.id, completed, user, challenge.name);
 
   // Apply penalty if failed
   if (!completed) {
@@ -251,7 +248,7 @@ const createDailyResult = async (
 /**
  * Update member's streak based on completion status
  */
-const updateStreak = async (memberId, completed) => {
+const updateStreak = async (memberId, completed, user, challengeName) => {
   const member = await prisma.challengeMember.findUnique({
     where: { id: memberId },
   });
@@ -269,6 +266,18 @@ const updateStreak = async (memberId, completed) => {
       },
     });
   } else {
+    // Send streak broken notification if they had a streak
+    if (member.currentStreak > 0 && user && user.email) {
+      sendStreakBrokenNotification(
+        user.email,
+        user.username,
+        member.currentStreak,
+        challengeName
+      ).catch((err) => {
+        logger.error(`Failed to send streak broken notification: ${err.message}`);
+      });
+    }
+
     // Reset current streak
     await prisma.challengeMember.update({
       where: { id: memberId },
@@ -308,13 +317,108 @@ const getMemberDailyResults = async (memberId, limit = 30) => {
 };
 
 /**
+ * Normalise a Date to local midnight so all date comparisons are consistent.
+ * Uses local time to match the convention used throughout the codebase
+ * (stats.service.js, dashboard.controller.js, cron evaluation).
+ * @param {Date} [date=new Date()] - Date to normalise (defaults to now)
+ * @returns {Date} Normalised date at 00:00:00.000 local time
+ */
+const normaliseToMidnight = (date = new Date()) => {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+/**
+ * Get daily results for multiple members in a single bulk query.
+ * Results are returned grouped by memberId to avoid N+1 query patterns.
+ *
+ * The window is intentionally calendar-based (e.g. daysBack=7 means the last
+ * 7 calendar days including today). This is the correct semantic for dashboard
+ * activity strips where missing days are meaningful — they represent days on
+ * which the member did not submit. Using a record-count limit (take: N) would
+ * silently skip missed days and surface stale results from weeks ago.
+ *
+ * @param {string[]} memberIds - Array of challenge member IDs
+ * @param {number} daysBack - Number of calendar days to look back (default 7)
+ * @returns {Object} Map of memberId -> dailyResult[], ordered newest-first
+ */
+const getBulkMemberDailyResults = async (memberIds, daysBack = 7) => {
+  if (!memberIds || memberIds.length === 0) return {};
+
+  const since = normaliseToMidnight();
+  since.setDate(since.getDate() - (daysBack - 1));
+
+  const results = await prisma.dailyResult.findMany({
+    where: {
+      memberId: { in: memberIds },
+      date: { gte: since },
+    },
+    orderBy: { date: "desc" },
+  });
+
+  return results.reduce((acc, result) => {
+    if (!acc[result.memberId]) acc[result.memberId] = [];
+    acc[result.memberId].push(result);
+    return acc;
+  }, {});
+};
+
+/**
+ * Get all daily results for multiple members in a single bulk query.
+ * Returns aggregated stats (totalDays, completedDays) grouped by memberId,
+ * used by the leaderboard which needs full-history counts rather than a
+ * calendar window.
+ * @param {string[]} memberIds - Array of challenge member IDs
+ * @returns {Object} Map of memberId -> { totalDays, completedDays }
+ */
+const getBulkAllMemberResults = async (memberIds) => {
+  if (!memberIds || memberIds.length === 0) return {};
+
+  const results = await prisma.dailyResult.findMany({
+    where: { memberId: { in: memberIds } },
+    select: { memberId: true, completed: true },
+  });
+
+  return results.reduce((acc, result) => {
+    if (!acc[result.memberId]) acc[result.memberId] = { totalDays: 0, completedDays: 0 };
+    acc[result.memberId].totalDays += 1;
+    if (result.completed) acc[result.memberId].completedDays += 1;
+    return acc;
+  }, {});
+};
+
+/**
+ * Get today's daily result for multiple members in a single bulk query.
+ * Results are returned as a map keyed by memberId for O(1) lookup.
+ * @param {string[]} memberIds - Array of challenge member IDs
+ * @returns {Object} Map of memberId -> dailyResult (or undefined if none)
+ */
+const getBulkTodayResults = async (memberIds) => {
+  if (!memberIds || memberIds.length === 0) return {};
+
+  const today = normaliseToMidnight();
+
+  const results = await prisma.dailyResult.findMany({
+    where: {
+      memberId: { in: memberIds },
+      date: today,
+    },
+  });
+
+  return results.reduce((acc, result) => {
+    acc[result.memberId] = result;
+    return acc;
+  }, {});
+};
+
+/**
  * Get today's status for a member
  * @param {string} memberId - Challenge member ID
  * @returns {Object|null} Today's daily result or null
  */
 const getTodayStatus = async (memberId) => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = normaliseToMidnight();
 
   return await prisma.dailyResult.findUnique({
     where: {
@@ -334,5 +438,8 @@ module.exports = {
   evaluateChallenge,
   evaluateMember,
   getMemberDailyResults,
+  getBulkMemberDailyResults,
+  getBulkAllMemberResults,
+  getBulkTodayResults,
   getTodayStatus,
 };

@@ -3,6 +3,7 @@ const { prisma } = require("../config/prisma");
 const { generateToken } = require("../utils/jwt");
 const { AppError } = require("../middlewares/error.middleware");
 const logger = require("../utils/logger");
+const { logAudit } = require("../utils/auditLogger");
 
 /**
  * Register a new user
@@ -53,6 +54,8 @@ const register = async (userData) => {
 
   logger.info(`New user registered: ${user.username} (${user.email})`);
 
+  await logAudit("USER_REGISTERED", user.id, { username: user.username, email: user.email });
+
   return {
     user,
     token,
@@ -88,6 +91,8 @@ const login = async (emailOrUsername, password) => {
   const token = generateToken({ userId: user.id });
 
   logger.info(`User logged in: ${user.username}`);
+
+  await logAudit("USER_LOGIN", user.id, { username: user.username });
 
   return {
     user: {
@@ -180,6 +185,8 @@ const updateProfile = async (userId, updateData) => {
 
     logger.info(`User profile updated: ${updatedUser.username}`);
 
+    await logAudit("PASSWORD_CHANGED", userId, { username: updatedUser.username });
+
     return updatedUser;
   }
 
@@ -200,6 +207,8 @@ const updateProfile = async (userId, updateData) => {
   });
 
   logger.info(`User profile updated: ${updatedUser.username}`);
+
+  await logAudit("PROFILE_UPDATED", userId, { username: updatedUser.username });
 
   return updatedUser;
 };

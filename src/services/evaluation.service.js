@@ -119,34 +119,28 @@ const evaluateMember = async (challenge, member, evaluationDate) => {
     return;
   }
 
-  // Fetch submissions for the date
-  let submissions;
-  try {
-    submissions = await leetcodeService.fetchSubmissionsForDate(
-      user.leetcodeUsername,
-      evaluationDate
+
     );
+    submissions = submissions?.recentAcSubmissionList || [];
   } catch (error) {
     logger.error(
       `Failed to fetch submissions for ${user.leetcodeUsername}:`,
       error
     );
 
-    // Create a failed result due to API error
+    // Mark as pending, do not penalize for API errors
     await createDailyResult(
       challenge.id,
       member.id,
       evaluationDate,
-      false,
+      null, // null = pending
       0,
       [],
       {
-        reason: "Failed to fetch submissions from LeetCode",
+        reason: "LeetCode API unavailable or rate limited",
         error: error.message,
       }
     );
-
-    // Don't apply penalty for API errors
     return;
   }
 

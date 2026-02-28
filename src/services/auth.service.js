@@ -2,9 +2,10 @@ const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const { prisma } = require("../config/prisma");
 const { config } = require("../config/env");
-const { generateToken } = require("../utils/jwt");
+const { generateToken, decodeToken } = require("../utils/jwt");
 const { AppError } = require("../middlewares/error.middleware");
 const logger = require("../utils/logger");
+const { logAudit } = require("../utils/auditLogger");
 const { sendWelcomeEmail, sendPasswordResetEmail } = require("./email.service");
 
 /**
@@ -47,6 +48,7 @@ const register = async (userData) => {
 
   logger.info(`New user registered: ${user.username} (${user.email})`);
 
+  await logAudit("USER_REGISTERED", user.id, { username: user.username, email: user.email });
   // Send welcome email (non-blocking)
   sendWelcomeEmail(user.email, user.username).catch((err) => {
     logger.error(`Failed to send welcome email: ${err.message}`);
@@ -93,6 +95,8 @@ const login = async (emailOrUsername, password) => {
   const token = generateToken({ userId: user.id });
 
   logger.info(`User logged in: ${user.username}`);
+
+  await logAudit("USER_LOGIN", user.id, { username: user.username });
 
   return {
     user: {
@@ -176,6 +180,7 @@ const updateProfile = async (userId, updateData) => {
 
     logger.info(`User profile updated: ${updatedUser.username}`);
 
+
     return {
       id: updatedUser.id,
       email: updatedUser.email,
@@ -183,6 +188,11 @@ const updateProfile = async (userId, updateData) => {
       leetcodeUsername: updatedUser.leetcodeUsername,
       updatedAt: updatedUser.updatedAt,
     };
+
+    await logAudit("PASSWORD_CHANGED", userId, { username: updatedUser.username });
+
+    return updatedUser;
+
   }
 
   // Update without password change
@@ -305,9 +315,15 @@ const resetPassword = async (token, newPassword) => {
   return {
     message: "Password reset successful",
   };
+
+  await logAudit("PROFILE_UPDATED", userId, { username: updatedUser.username });
+
+  return updatedUser;
+
 };
 
 /**
+
  * Request password reset email
  * @param {string} email - User email
  * @returns {Object} Generic response
@@ -409,6 +425,67 @@ const resetPassword = async (token, newPassword) => {
   };
 };
 
+/**
+ * Blacklist a JWT token
+ * @param {string} token - JWT token to blacklist
+ * @param {string} userId - User ID for ownership verification
+ * @throws {Error} If token is invalid or cannot be decoded
+ */
+const blacklistToken = async (token, userId) => {
+  try {
+    // Decode token to get expiry time
+    const decoded = decodeToken(token);
+
+    if (!decoded || !decoded.exp) {
+      throw new AppError("Invalid token", 400);
+    }
+
+    // Verify token ownership - ensure user can only blacklist their own tokens
+    if (decoded.userId !== userId) {
+      throw new AppError("Token ownership mismatch", 403);
+    }
+
+    // Convert Unix timestamp (seconds) to milliseconds and then to Date
+    const expiresAt = new Date(decoded.exp * 1000);
+
+    // Add token to blacklist using upsert for idempotent logout
+    await prisma.tokenBlacklist.upsert({
+      where: { token },
+      update: {}, // No update needed if already exists
+      create: {
+        token,
+        expiresAt,
+      },
+    });
+
+    logger.info(`Token blacklisted for user: ${decoded.userId}`);
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    logger.error(`Error blacklisting token: ${error.message}`);
+    throw new AppError("Failed to logout", 500);
+  }
+};
+
+/**
+ * Check if a token is blacklisted
+ * @param {string} token - JWT token to check
+ * @returns {boolean} True if token is blacklisted, false otherwise
+ */
+const isTokenBlacklisted = async (token) => {
+  try {
+    const blacklistedToken = await prisma.tokenBlacklist.findUnique({
+      where: { token },
+    });
+
+    return !!blacklistedToken;
+  } catch (error) {
+    logger.error(`Error checking token blacklist: ${error.message}`);
+    return false;
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -423,5 +500,7 @@ module.exports = {
   forgotPassword,
   resetPassword,
 
+  blacklistToken,
+  isTokenBlacklisted,
 };
 

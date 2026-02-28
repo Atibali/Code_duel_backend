@@ -5,7 +5,7 @@ const responseTime = require("response-time");
 const { config } = require("./config/env");
 const { errorHandler, notFound } = require("./middlewares/error.middleware");
 const logger = require("./utils/logger");
-const { apiLimiter } = require("./config/rateLimiter");
+// const { apiLimiter } = require("./config/rateLimiter");
 
 const adminRoutes = require("./routes/admin.routes");
 

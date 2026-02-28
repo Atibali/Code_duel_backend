@@ -14,7 +14,7 @@ const runDailyEvaluationWithQueue = async () => {
   evaluationDate.setHours(0, 0, 0, 0); // Start of day
 
   logger.info(
-    `Starting queue-based daily evaluation for date: ${evaluationDate.toISOString()}`
+    `Starting queue-based daily evaluation for date: ${evaluationDate.toISOString()}`,
   );
 
   try {
@@ -32,7 +32,7 @@ const runDailyEvaluationWithQueue = async () => {
     });
 
     logger.info(
-      `Found ${activeChallenges.length} active challenges to evaluate`
+      `Found ${activeChallenges.length} active challenges to evaluate`,
     );
 
     // Push challenge evaluation jobs to queue
@@ -50,7 +50,7 @@ const runDailyEvaluationWithQueue = async () => {
     await evaluationQueue.addBulk(jobs);
 
     logger.info(
-      `Successfully queued ${jobs.length} challenge evaluation jobs. Processing asynchronously...`
+      `Successfully queued ${jobs.length} challenge evaluation jobs. Processing asynchronously...`,
     );
 
     return {
@@ -74,7 +74,7 @@ const runDailyEvaluation = async () => {
   evaluationDate.setHours(0, 0, 0, 0); // Start of day
 
   logger.info(
-    `Starting daily evaluation for date: ${evaluationDate.toISOString()}`
+    `Starting daily evaluation for date: ${evaluationDate.toISOString()}`,
   );
 
   try {
@@ -103,7 +103,7 @@ const runDailyEvaluation = async () => {
     });
 
     logger.info(
-      `Found ${activeChallenges.length} active challenges to evaluate`
+      `Found ${activeChallenges.length} active challenges to evaluate`,
     );
 
     // Evaluate each challenge
@@ -137,7 +137,7 @@ const evaluateChallenge = async (challenge, evaluationDate) => {
     } catch (error) {
       logger.error(
         `Failed to evaluate member ${member.user.username} for challenge ${challenge.name}:`,
-        error
+        error,
       );
       // Continue with other members
     }
@@ -167,7 +167,7 @@ const evaluateMember = async (challenge, member, evaluationDate) => {
       [],
       {
         reason: "No LeetCode username configured",
-      }
+      },
     );
 
     // Apply penalty
@@ -175,18 +175,21 @@ const evaluateMember = async (challenge, member, evaluationDate) => {
       challenge,
       member,
       evaluationDate,
-      "No LeetCode username configured"
+      "No LeetCode username configured",
     );
     return;
   }
 
-
+  let submissions = [];
+  try {
+    submissions = await leetcodeService.fetchSubmissionsForDate(
+      user.leetcodeUsername,
+      evaluationDate,
     );
-    submissions = submissions?.recentAcSubmissionList || [];
   } catch (error) {
     logger.error(
       `Failed to fetch submissions for ${user.leetcodeUsername}:`,
-      error
+      error,
     );
 
     // Mark as pending, do not penalize for API errors
@@ -200,28 +203,26 @@ const evaluateMember = async (challenge, member, evaluationDate) => {
       {
         reason: "LeetCode API unavailable or rate limited",
         error: error.message,
-      }
+      },
     );
     return;
   }
 
   // Enrich submissions with metadata (difficulty, etc.)
   const enrichedSubmissions =
-    await leetcodeService.enrichSubmissionsWithMetadata(
-      submissions
-    );
+    await leetcodeService.enrichSubmissionsWithMetadata(submissions);
 
   // Filter by difficulty if specified
   let filteredSubmissions = enrichedSubmissions;
   if (challenge.difficultyFilter && challenge.difficultyFilter.length > 0) {
     filteredSubmissions = enrichedSubmissions.filter((sub) =>
-      challenge.difficultyFilter.includes(sub.difficulty)
+      challenge.difficultyFilter.includes(sub.difficulty),
     );
 
     logger.debug(
       `Filtered ${enrichedSubmissions.length} submissions to ${
         filteredSubmissions.length
-      } matching difficulties: ${challenge.difficultyFilter.join(", ")}`
+      } matching difficulties: ${challenge.difficultyFilter.join(", ")}`,
     );
   }
 
@@ -251,7 +252,7 @@ const evaluateMember = async (challenge, member, evaluationDate) => {
         timestamp: s.timestamp,
         language: s.language,
       })),
-    }
+    },
   );
 
   // Update streak
@@ -263,14 +264,14 @@ const evaluateMember = async (challenge, member, evaluationDate) => {
       challenge,
       member,
       evaluationDate,
-      `Failed to meet daily requirement: ${submissionsCount}/${challenge.minSubmissionsPerDay} submissions`
+      `Failed to meet daily requirement: ${submissionsCount}/${challenge.minSubmissionsPerDay} submissions`,
     );
   }
 
   logger.info(
     `Member ${user.username} evaluation: ${
       completed ? "PASSED" : "FAILED"
-    } (${submissionsCount}/${challenge.minSubmissionsPerDay})`
+    } (${submissionsCount}/${challenge.minSubmissionsPerDay})`,
   );
 };
 
@@ -284,7 +285,7 @@ const createDailyResult = async (
   completed,
   submissionsCount,
   problemsSolved,
-  metadata = {}
+  metadata = {},
 ) => {
   return await prisma.dailyResult.create({
     data: {
@@ -327,9 +328,11 @@ const updateStreak = async (memberId, completed, user, challengeName) => {
         user.email,
         user.username,
         member.currentStreak,
-        challengeName
+        challengeName,
       ).catch((err) => {
-        logger.error(`Failed to send streak broken notification: ${err.message}`);
+        logger.error(
+          `Failed to send streak broken notification: ${err.message}`,
+        );
       });
     }
 
@@ -352,7 +355,7 @@ const applyPenaltyForFailure = async (challenge, member, date, reason) => {
       member.id,
       challenge.penaltyAmount,
       reason,
-      date
+      date,
     );
   }
 };
@@ -436,7 +439,8 @@ const getBulkAllMemberResults = async (memberIds) => {
   });
 
   return results.reduce((acc, result) => {
-    if (!acc[result.memberId]) acc[result.memberId] = { totalDays: 0, completedDays: 0 };
+    if (!acc[result.memberId])
+      acc[result.memberId] = { totalDays: 0, completedDays: 0 };
     acc[result.memberId].totalDays += 1;
     if (result.completed) acc[result.memberId].completedDays += 1;
     return acc;

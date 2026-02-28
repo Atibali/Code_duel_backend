@@ -116,7 +116,23 @@ const optionalAuthenticate = async (req, res, next) => {
   }
 };
 
+/**
+ * Admin authorization middleware
+ * Placeholder until role-based access is implemented
+ */
+const authorizeAdmin = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: "Authentication required",
+    });
+  }
+
+  next();
+};
+
 module.exports = {
   authenticate,
   optionalAuthenticate,
+  authorizeAdmin,
 };

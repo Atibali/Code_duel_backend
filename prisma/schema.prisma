@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model DailySubmission {
@@ -23,14 +24,6 @@ model DailySubmission {
 }
 
 model User {
-  id                 String           @id @default(uuid())
-  email              String           @unique
-  username           String           @unique
-  password           String
-  leetcodeUsername   String?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-
   id                String             @id @default(uuid())
   email             String             @unique
   username          String             @unique
@@ -50,10 +43,6 @@ model User {
   dailySubmissions   DailySubmission[] @relation("UserDailySubmissions")
   ownedChallenges    Challenge[]       @relation("ChallengeOwner")
   memberships        ChallengeMember[]
-
-
-  ownedChallenges   Challenge[]        @relation("ChallengeOwner")
-  memberships       ChallengeMember[]
   challengeInvites  ChallengeInvite[]  @relation("InviteCreator")
   
 
@@ -77,9 +66,6 @@ model Challenge {
   owner             User                 @relation("ChallengeOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   dailySubmissions  DailySubmission[]    @relation("ChallengeDailySubmissions")
   members           ChallengeMember[]
-
-  owner                   User               @relation("ChallengeOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  members                 ChallengeMember[]
   dailyResults            DailyResult[]
   invites                 ChallengeInvite[]
   

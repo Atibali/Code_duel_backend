@@ -104,13 +104,10 @@ const fetchUserSubmissions = async (leetcodeUsername) => {
     const submissionLimit = config.leetcodeSubmissionFetchLimit || 100;
 
     // Fetch recent submissions
-    const response = await leetcodeApiRequest(
-      RECENT_SUBMISSIONS_QUERY,
-      {
-        username: leetcodeUsername,
-        limit: submissionLimit,
-      }
-    );
+    const response = await leetcodeApiRequest(RECENT_SUBMISSIONS_QUERY, {
+      username: leetcodeUsername,
+      limit: submissionLimit,
+    });
 
     if (!response || !response.data) {
       logger.warn(`No data returned for user: ${leetcodeUsername}`);
@@ -120,7 +117,7 @@ const fetchUserSubmissions = async (leetcodeUsername) => {
     const submissions = response.data.data.recentAcSubmissionList || [];
 
     logger.debug(
-      `Fetched ${submissions.length} submissions for ${leetcodeUsername}`
+      `Fetched ${submissions.length} submissions for ${leetcodeUsername}`,
     );
 
     return submissions;
@@ -169,19 +166,6 @@ const parseSubmissions = async (submissions) => {
  * @returns {Array} Submissions for the date
  */
 const fetchSubmissionsForDate = async (leetcodeUsername, date) => {
-  const allSubmissions = await fetchUserSubmissions(leetcodeUsername);
-  
-  const startOfDay = new Date(date);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(date);
-  endOfDay.setHours(23, 59, 59, 999);
-  
-  const startTimestamp = Math.floor(startOfDay.getTime() / 1000);
-  const endTimestamp = Math.floor(endOfDay.getTime() / 1000);
-  
-  return allSubmissions.filter(sub => {
-    const subTimestamp = parseInt(sub.timestamp);
-    return subTimestamp >= startTimestamp && subTimestamp <= endTimestamp;
   const submissions = await fetchUserSubmissions(leetcodeUsername);
 
   const targetDate = new Date(date);
@@ -225,7 +209,7 @@ const fetchLeetCodeData = async (query, variables) => {
       const status = error.response.status;
       if (status === 429) {
         throw new Error("Rate limit exceeded. Please try again later.");
-      }else if (status === 404) {
+      } else if (status === 404) {
         throw new Error("Resource not found.");
       }
     }
@@ -269,10 +253,7 @@ const fetchProblemMetadata = async (titleSlug) => {
     // Fetch from LeetCode API
     logger.debug(`Fetching fresh metadata for problem: ${titleSlug}`);
 
-    const data = await fetchLeetCodeData(
-      PROBLEM_DETAILS_QUERY,
-      { titleSlug }
-    );
+    const data = await fetchLeetCodeData(PROBLEM_DETAILS_QUERY, { titleSlug });
 
     if (!data || !data.question) {
       logger.warn(`No problem data found for: ${titleSlug}`);
@@ -308,7 +289,7 @@ const fetchProblemMetadata = async (titleSlug) => {
     });
 
     logger.info(
-      `Cached metadata for problem: ${titleSlug} (${problem.difficulty})`
+      `Cached metadata for problem: ${titleSlug} (${problem.difficulty})`,
     );
 
     return savedMetadata;
@@ -329,9 +310,7 @@ const enrichSubmissionsWithMetadata = async (submissions) => {
 
   for (const submission of submissions) {
     try {
-      const metadata = await fetchProblemMetadata(
-        submission.titleSlug
-      );
+      const metadata = await fetchProblemMetadata(submission.titleSlug);
 
       enrichedSubmissions.push({
         id: submission.id,
@@ -348,7 +327,7 @@ const enrichSubmissionsWithMetadata = async (submissions) => {
     } catch (error) {
       logger.warn(
         `Failed to enrich submission ${submission.titleSlug}:`,
-        error.message
+        error.message,
       );
       enrichedSubmissions.push({
         id: submission.id,
@@ -375,10 +354,10 @@ const enrichSubmissionsWithMetadata = async (submissions) => {
 const fetchUserProfile = async (username) => {
   try {
     const currentYear = new Date().getFullYear();
-    const data = await fetchLeetCodeData(
-      USER_CALENDAR_QUERY,
-      { username, year: currentYear }
-    );
+    const data = await fetchLeetCodeData(USER_CALENDAR_QUERY, {
+      username,
+      year: currentYear,
+    });
 
     if (!data || !data.matchedUser) {
       throw new Error("User not found");

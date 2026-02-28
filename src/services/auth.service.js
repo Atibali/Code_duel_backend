@@ -48,7 +48,10 @@ const register = async (userData) => {
 
   logger.info(`New user registered: ${user.username} (${user.email})`);
 
-  await logAudit("USER_REGISTERED", user.id, { username: user.username, email: user.email });
+  await logAudit("USER_REGISTERED", user.id, {
+    username: user.username,
+    email: user.email,
+  });
   // Send welcome email (non-blocking)
   sendWelcomeEmail(user.email, user.username).catch((err) => {
     logger.error(`Failed to send welcome email: ${err.message}`);
@@ -73,10 +76,7 @@ const login = async (emailOrUsername, password) => {
   // Find user by email OR username
   const user = await prisma.user.findFirst({
     where: {
-      OR: [
-        { email: emailOrUsername },
-        { username: emailOrUsername },
-      ],
+      OR: [{ email: emailOrUsername }, { username: emailOrUsername }],
     },
   });
 
@@ -160,7 +160,7 @@ const updateProfile = async (userId, updateData) => {
 
     const isPasswordValid = await bcrypt.compare(
       currentPassword,
-      user.password
+      user.password,
     );
 
     if (!isPasswordValid) {
@@ -180,6 +180,9 @@ const updateProfile = async (userId, updateData) => {
 
     logger.info(`User profile updated: ${updatedUser.username}`);
 
+    await logAudit("PASSWORD_CHANGED", userId, {
+      username: updatedUser.username,
+    });
 
     return {
       id: updatedUser.id,
@@ -188,11 +191,6 @@ const updateProfile = async (userId, updateData) => {
       leetcodeUsername: updatedUser.leetcodeUsername,
       updatedAt: updatedUser.updatedAt,
     };
-
-    await logAudit("PASSWORD_CHANGED", userId, { username: updatedUser.username });
-
-    return updatedUser;
-
   }
 
   // Update without password change
@@ -241,7 +239,7 @@ const forgotPassword = async (email) => {
   const rawToken = crypto.randomBytes(32).toString("hex");
   const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
   const expiryDate = new Date(
-    Date.now() + config.passwordResetTokenExpiryMinutes * 60 * 1000
+    Date.now() + config.passwordResetTokenExpiryMinutes * 60 * 1000,
   );
 
   await prisma.user.update({
@@ -258,120 +256,12 @@ const forgotPassword = async (email) => {
     user.email,
     user.username,
     resetLink,
-    config.passwordResetTokenExpiryMinutes
+    config.passwordResetTokenExpiryMinutes,
   );
 
   if (!emailResult.success) {
     logger.error(
-      `Password reset email failed for ${user.email}: ${emailResult.reason}`
-    );
-  }
-
-  return {
-    message:
-      "If an account with that email exists, a password reset link has been sent.",
-  };
-};
-
-/**
- * Reset user password using token
- * @param {string} token - Raw reset token
- * @param {string} newPassword - New password
- * @returns {Object} Success message
- */
-const resetPassword = async (token, newPassword) => {
-  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-
-  const user = await prisma.user.findFirst({
-    where: {
-      passwordResetTokenHash: tokenHash,
-      passwordResetTokenExpiry: {
-        gt: new Date(),
-      },
-    },
-    select: {
-      id: true,
-      username: true,
-    },
-  });
-
-  if (!user) {
-    throw new AppError("Invalid or expired reset token", 400);
-  }
-
-  const hashedPassword = await bcrypt.hash(newPassword, 12);
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      password: hashedPassword,
-      passwordResetTokenHash: null,
-      passwordResetTokenExpiry: null,
-    },
-  });
-
-  logger.info(`Password reset successful for user: ${user.username}`);
-
-  return {
-    message: "Password reset successful",
-  };
-
-  await logAudit("PROFILE_UPDATED", userId, { username: updatedUser.username });
-
-  return updatedUser;
-
-};
-
-/**
-
- * Request password reset email
- * @param {string} email - User email
- * @returns {Object} Generic response
- */
-const forgotPassword = async (email) => {
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: {
-      id: true,
-      email: true,
-      username: true,
-    },
-  });
-
-  if (!user) {
-    logger.info(`Password reset requested for non-existent email: ${email}`);
-    return {
-      message:
-        "If an account with that email exists, a password reset link has been sent.",
-    };
-  }
-
-  const rawToken = crypto.randomBytes(32).toString("hex");
-  const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
-  const expiryDate = new Date(
-    Date.now() + config.passwordResetTokenExpiryMinutes * 60 * 1000
-  );
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      passwordResetTokenHash: tokenHash,
-      passwordResetTokenExpiry: expiryDate,
-    },
-  });
-
-  const resetLink = `${config.appBaseUrl}/reset-password?token=${rawToken}`;
-
-  const emailResult = await sendPasswordResetEmail(
-    user.email,
-    user.username,
-    resetLink,
-    config.passwordResetTokenExpiryMinutes
-  );
-
-  if (!emailResult.success) {
-    logger.error(
-      `Password reset email failed for ${user.email}: ${emailResult.reason}`
+      `Password reset email failed for ${user.email}: ${emailResult.reason}`,
     );
   }
 
@@ -491,16 +381,8 @@ module.exports = {
   login,
   getProfile,
   updateProfile,
-
   forgotPassword,
   resetPassword,
-
-};
-
-  forgotPassword,
-  resetPassword,
-
   blacklistToken,
   isTokenBlacklisted,
 };
-

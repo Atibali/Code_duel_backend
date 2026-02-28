@@ -65,3 +65,6 @@ SETUP_GUIDE.md
 # Agent and skills files
 .agents/
 skills-lock.json
+# Agent/Skills files
+.agents/
+skills-lock.json

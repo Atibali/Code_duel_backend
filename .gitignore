@@ -26,6 +26,6 @@ package-lock.json
 *.sw?
 .env
 
-# Generated JS artifacts from TS/TSX (do not commit)
-src/**/*.js
-src/**/*.js.map
+# Temporary files
+tmp/
+temp/

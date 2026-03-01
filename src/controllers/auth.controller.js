@@ -71,6 +71,26 @@ const validateResetPassword = [
 ];
 
 /**
+ * Validation middleware for forgot password
+ */
+const validateForgotPassword = [
+  body("email")
+    .isEmail()
+    .normalizeEmail()
+    .withMessage("Valid email is required"),
+];
+
+/**
+ * Validation middleware for reset password
+ */
+const validateResetPassword = [
+  body("token").notEmpty().withMessage("Reset token is required"),
+  body("newPassword")
+    .isLength({ min: 6 })
+    .withMessage("New password must be at least 6 characters"),
+];
+
+/**
  * Validation middleware for profile update
  */
 const validateUpdateProfile = [
@@ -97,6 +117,18 @@ const validateUpdateProfile = [
  * Register a new user
  * POST /api/auth/register
  */
+
+const verifyEmail = asyncHandler(async (req, res) => {
+  const { token } = req.query;
+
+  const result = await authService.verifyEmail(token);
+
+  res.status(200).json({
+    success: true,
+    message: result.message,
+  });
+});
+
 const register = asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -254,6 +286,9 @@ module.exports = {
   login,
   getProfile,
   updateProfile,
+  validateRegister,
+  validateLogin,
+  verifyEmail,
   forgotPassword,
   resetPassword,
   logout,
@@ -261,5 +296,4 @@ module.exports = {
   validateLogin,
   validateForgotPassword,
   validateResetPassword,
-  validateUpdateProfile,
 };

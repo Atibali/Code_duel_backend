@@ -8,7 +8,7 @@ const { authLimiter, registerLimiter } = require("../config/rateLimiter");
  * @route   POST /api/auth/register
  * @desc    Register a new user
  * @access  Public
- */
+*/
 router.post(
   "/register",
   registerLimiter,
@@ -20,8 +20,8 @@ router.post(
  * @route   POST /api/auth/login
  * @desc    Login user
  * @access  Public
- */
-router.post("/login", authLimiter, authController.validateLogin, authController.login);
+*/
+router.post("/login", authController.validateLogin, authController.login);
 
 /**
  * @route   POST /api/auth/forgot-password
@@ -49,20 +49,22 @@ router.post(
  * @route   GET /api/auth/profile
  * @desc    Get current user profile
  * @access  Private
- */
+*/
 router.get("/profile", authenticate, authController.getProfile);
 
 /**
  * @route   PUT /api/auth/profile
  * @desc    Update user profile
  * @access  Private
- */
-router.put(
-  "/profile",
-  authenticate,
-  authController.validateUpdateProfile,
-  authController.updateProfile
-);
+*/
+router.put("/profile", authenticate, authController.updateProfile);
+
+/**
+ * @route   PUT /api/auth/verify-email
+ * @desc    Verifies user email
+ * @access  Public
+*/
+router.get("/verify-email", authController.verifyEmail);
 
 /**
  * @route   POST /api/auth/logout

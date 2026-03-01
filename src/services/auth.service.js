@@ -5,9 +5,8 @@ const { config } = require("../config/env");
 const { generateToken, decodeToken } = require("../utils/jwt");
 const { AppError } = require("../middlewares/error.middleware");
 const logger = require("../utils/logger");
-const { logAudit } = require("../utils/auditLogger");
-const { sendWelcomeEmail, sendPasswordResetEmail } = require("./email.service");
-
+const { sendWelcomeEmail, sendVerificationEmail } = require("./email.service");
+const crypto = require('crypto');
 /**
  * Register a new user
  */
@@ -30,43 +29,70 @@ const register = async (userData) => {
     }
   }
 
-  // Hash password
+
   const hashedPassword = await bcrypt.hash(password, 12);
 
-  // Create user
+  const verificationToken = crypto.randomBytes(32).toString("hex");
+  const tokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
   const user = await prisma.user.create({
     data: {
       email,
       username,
       password: hashedPassword,
       leetcodeUsername: leetcodeUsername || null,
+      isEmailVerified: false,
+      emailVerificationToken: verificationToken,
+      emailVerificationExpires: tokenExpiry,
     },
   });
-
-  // Generate JWT token
-  const token = generateToken({ userId: user.id });
 
   logger.info(`New user registered: ${user.username} (${user.email})`);
 
-  await logAudit("USER_REGISTERED", user.id, {
-    username: user.username,
-    email: user.email,
-  });
-  // Send welcome email (non-blocking)
-  sendWelcomeEmail(user.email, user.username).catch((err) => {
-    logger.error(`Failed to send welcome email: ${err.message}`);
+  sendVerificationEmail(
+    user.email,
+    user.username,
+    verificationToken
+  ).catch((err) => {
+    logger.error(`Failed to send verification email: ${err.message}`);
   });
 
   return {
-    user: {
-      id: user.id,
-      email: user.email,
-      username: user.username,
-      leetcodeUsername: user.leetcodeUsername,
-      createdAt: user.createdAt,
-    },
-    token,
+    user,
+    message: "Registration successful. Please verify your email.",
   };
+};
+// VerifyEmail
+const verifyEmail = async (token) => {
+  const user = await prisma.user.findFirst({
+    where: {
+      emailVerificationToken: token,
+      emailVerificationExpires: {
+        gte: new Date(),
+      },
+    },
+  });
+
+  if (!user) {
+    throw new AppError("Invalid or expired verification token", 400);
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      isEmailVerified: true,
+      emailVerificationToken: null,
+      emailVerificationExpires: null,
+    },
+  });
+  
+  sendWelcomeEmail(user.email, user.username).catch((err) => {
+    logger.error(`Failed to send welcome email: ${err.message}`);
+  });
+  
+  logger.info(`Email verified for user: ${user.username}`);
+
+  return { message: "Email verified successfully" };
 };
 
 /**
@@ -91,7 +117,14 @@ const login = async (emailOrUsername, password) => {
     throw new AppError("Invalid credentials", 401);
   }
 
-  // Generate token
+  if (!user.isEmailVerified) {
+  throw new AppError(
+    "Please verify your email before logging in.",
+    403
+  );
+}
+
+  // Generate JWT token
   const token = generateToken({ userId: user.id });
 
   logger.info(`User logged in: ${user.username}`);
@@ -381,8 +414,5 @@ module.exports = {
   login,
   getProfile,
   updateProfile,
-  forgotPassword,
-  resetPassword,
-  blacklistToken,
-  isTokenBlacklisted,
+  verifyEmail,
 };

@@ -5,7 +5,10 @@ const { config } = require("../config/env");
 const { generateToken, decodeToken } = require("../utils/jwt");
 const { AppError } = require("../middlewares/error.middleware");
 const logger = require("../utils/logger");
-const { sendWelcomeEmail, sendVerificationEmail } = require("./email.service");
+const { logAudit } = require("../utils/auditLogger");
+const { sendWelcomeEmail, sendPasswordResetEmail } = require("./email.service");
+
+const MIN_PASSWORD_LENGTH = 6;
 const crypto = require('crypto');
 /**
  * Register a new user
@@ -179,6 +182,13 @@ const updateProfile = async (userId, updateData) => {
 
   // If password change requested
   if (newPassword) {
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      throw new AppError(
+        `Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
+        400
+      );
+    }
+
     if (!currentPassword) {
       throw new AppError("Current password is required", 400);
     }
